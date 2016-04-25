@@ -103,7 +103,12 @@ with db_session:
 
 ### "Contains" query
 
-In PostgreSQL, you can query all the instances containing a given subset of data
+In PostgreSQL, you can query all the instances containing a given subset of data.
+You can do it using Python `in` operator:
+    
+```python
+select({"visible": True} in obj.data['details'] for obj in MyEntity)
+```
 
 `Note:`: Works only with PostgreSQL
 
