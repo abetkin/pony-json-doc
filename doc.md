@@ -1,5 +1,72 @@
 ## Overview
 
+[JSON](https://en.wikipedia.org/wiki/JSON) support has been added lately in all major database providers.
+Being able to have dynamic fields in your entities  
+Pony adds support for JSON fields as well.
+
+JSON support introduces dynamic data structures commonly found in NoSQL databases.
+Usually they are used when working with highly varying data or
+if the exact data structure is hard to predict.
+
+Pony allows you to store
+such data in your database without sacrificing rich data search and
+filtering capabilities.
+
+### Declaring a JSON field
+
+Usually you define an attribute passing the underlying Python type, such as `str` or `bool`
+as a parameter. With Json, you pass `Json` type instead:
+
+```python
+from pony.orm import Json
+
+class DynamicEntity(db.Entity):
+    uid = Required(str, primary_key=True)
+    data = Optional(Json)
+```
+
+Let's create an entity:
+```python
+with db_session:
+    DynamicEntity(uid='id-1')
+```
+Since `data` field is optional, we can omit it for now. First, you can read and write
+Json attributes as any others:
+
+```python
+with db_session:
+    obj = DynamicEntity['id-1']
+    assert(obj.data is None)
+    obj.data = {'items': [1, 2, 3]}
+    # changes will be flushed into the database
+```
+
+### Modifying JSON data
+
+Besides setting a new value for JSON field, you can also modify the chunks of it:
+
+```python
+with db_session:
+    obj = DynamicEntity['id-1']
+    obj.data['items'] = []
+```
+Pony will track changes to `obj` properly.
+
+`Note`: Although in Python `dict` and `list` instances are mutable,
+Pony still can track changes when the attributes are modified.
+In order to do this, custom `dict` and `list` objects are returned
+when Json attributes are fetched.
+
+### Querying JSON paths
+
+What native database support of JSON really provides to us is querying such data.
+
+When querying with Python generators, you can specify JSON path,
+using dictionary item access, either int or str.
+Eg.: `obj.data['items'][0]['title']`.
+
+Let us see another example
+
 ```python
 class DatabaseVendor(db.Entity):
     name = Required(str)
@@ -13,32 +80,19 @@ with db_session:
         'json': True,
     })
 ```
-Notice the `Json` type, passed as a parameter to the last two entity attributes.
-
-You can set/update a Json value as a normal Python dict/list:
-```python
-with db_session:
-    oracle = get(d for d in DatabaseVendor if d.name == 'oracle')
-    oracle.features['GUI admin'] = True
-```
- 
-In Python queries, you can access attributes by its JSON path,
-using dictionary item access, either int or str.
-For example, `obj.data['items'][0]['title']` in case we have a respective Json field `data`.
-
-Or, in the example above, we can make a select like:
+Suppose we want to select all databases supporting clustering:
 ```python
 >>> select((d.name, d.features['clustering']) for d in DatabaseVendor)[:]
 [('oracle', True)]
 ```
 
 
-In queries, `dict` is associated with JSON type. For example, here is how you can find element
+Within queries, `dict` is associated with JSON type. For example, here is how you can find element
 by its JSON value:
 ```python
 get(o for o in MyEntity if o.data == {'some': 'data'})
 ```
-The `list` type probably will be used for the array type in databases supporting it,
+The `list` type will probably be used for the array type in databases supporting it, eg., Postgres,
 so currently you should wrap it in a `Json` object:
 
 ```python
@@ -47,22 +101,22 @@ with db_session:
     oracle.supported_os = Json(['RHEL', 'Oracle Linux', 'SUSE'])
 ```
 
-### Tracking changes
+### "Contains" query
 
-Within a Pony session, given a set of fetched entities,
-Pony is tracking changes to the values of their attributes so it could flush them back
-into the database. Though in Python `dict` and `list` instances are not immutable,
-changes to the respective attributes can also be tracked by Pony.
-To accomplish this, custom `dict` and `list` objects are returned
-when Json attributes are fetched.
+In PostgreSQL, you can query all the instances containing a given subset of data
 
+`Note:`: Works only with PostgreSQL
+
+### JSON concatenation
+
+In PostgreSQL, you can concatenate JSON data:
 ```python
-with db_session:
-    obj = Entity[1]
-    # Modifying obj.data
-    del obj.data['items'][2]
-   # changes will be commited
+select(e.data | e.extra_data for e in MyEntity)
 ```
+
+`Note:`: Works only with PostgreSQL
+
+Besides an attribute, `extra_data` could be a Python dict as well.
 
 ### Length of json value
 
@@ -88,24 +142,8 @@ You can benefit from better JSON support in sqlite if you have `json1` extension
 installed. Otherwise, JSON values are fetched and parsed in an ineffective way.
 
 ### PostgreSQL
-Besides the common set, following features are supported:
 
-- JSON concatenation
-
-    ```python
-    select(e.data | e.extra_data for e in MyEntity)
-    ```
-    
-    Besides an attribute, `extra_data` could be a Python dict as well.
-
-- Contains JSON
-
-    We can check whether a JSON contains the specified part.
-    Python `in` operator is used for this:
-    
-    ```python
-    select({"visible": True} in obj.data['details'] for obj in MyEntity)
-    ```
+As shown above, PostgreSQL supports JSON concatenation and "JSON contains" features
 
 ### MySql and Oracle
 
