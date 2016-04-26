@@ -6,10 +6,10 @@ Pony adds support for JSON fields as well.
 
 JSON support introduces dynamic data structures commonly found in NoSQL databases.
 Usually they are used when working with highly varying data or
-if the exact data structure is hard to predict.
+when the exact data structure is hard to predict.
 
 Pony allows you to store
-such data in your database without sacrificing rich data search and
+such data in your database without sacrificing rich data searching and
 filtering capabilities.
 
 ### Declaring a JSON field
@@ -20,37 +20,61 @@ as a parameter. With Json, you pass `Json` type instead:
 ```python
 from pony.orm import Json
 
-class DynamicEntity(db.Entity):
-    uid = Required(str, primary_key=True)
-    data = Optional(Json)
+class TShirt(db.Entity):
+    article = PrimaryKey(str)
+    color = Optional(str)
+    sizes = Required(Json)
+    extra_info = Optional(Json)
+
 ```
 
-Let's create an entity:
+In the example above we have a T-Shirts database, where we have some required attributes
+like color and sizes left as well as some extra info that can be provided by the manufacturer.
+`sizes` attribute is supposed to be a set. With JSON, a way to model a set is to use a
+boolean dict:
+
+```python
+def sizes(*values):
+    return {size: '+' for size in values}
+``` 
+
+Probably, you can guess how we can add a T-Shirt item:
 ```python
 with db_session:
-    DynamicEntity(uid='id-1')
+    TShirt(article='A-235',
+           color='magenta',
+           sizes=sizes('S', 'M'),
+           extra_info={
+            'laundry_temp': 40, 'ironing_temp': 200,
+           })
 ```
-Since `data` field is optional, we can omit it for now. First, you can read and write
-Json attributes as any others:
+
+### Reading and writing of JSON attributes
+
+You can read and write JSON attributes as any others. Suppose, one day the S-sized t-shirt
+found its customer:
 
 ```python
 with db_session:
-    obj = DynamicEntity['id-1']
-    assert(obj.data is None)
-    obj.data = {'items': [1, 2, 3]}
+    ts = TShirt['A-235']
+    assert('S' in ts.sizes)
+    new_sizes = [size for size in ts.sizes if size != 'S')
+    ts.sizes = sizes(*new_sizes)
     # changes will be flushed into the database
 ```
 
 ### Modifying JSON data
 
-Besides setting a new value for JSON field, you can also modify the chunks of it:
+Besides setting a new value for JSON field, you can also modify the chunks of it.
+For example, in the example above we could write:
 
 ```python
 with db_session:
-    obj = DynamicEntity['id-1']
-    obj.data['items'] = []
+    ts = TShirt['A-235']
+    ts.sizes.pop('S')
+    # changes will be flushed into the database
 ```
-Pony will track changes to `obj` properly.
+Pony will track changes to `sizes` attribute properly.
 
 `Note`: Although in Python `dict` and `list` instances are mutable,
 Pony still can track changes when the attributes are modified.
@@ -59,33 +83,18 @@ when Json attributes are fetched.
 
 ### Querying JSON paths
 
-What native database support of JSON really provides to us is querying such data.
+What native database support of JSON really provides to us is querying JSON data.
 
 When querying with Python generators, you can specify JSON path,
 using dictionary item access, either int or str.
 Eg.: `obj.data['items'][0]['title']`.
 
-Let us see another example
+Taking our clothes store example, suppose we want to query for all M-sized t-shirts:
 
 ```python
-class DatabaseVendor(db.Entity):
-    name = Required(str)
-    commercial = Required(bool)
-    features = Optional(Json)
-    supported_os = Optional(Json)
-    
-with db_session:
-    DatabaseVendor(name='oracle', commercial=True, features={
-        'clustering': True,
-        'json': True,
-    })
+>>> select(ts.article for ts in TShirt if ts.sizes['M'] == '+')[:]
+['A-235']
 ```
-Suppose we want to select all databases supporting clustering:
-```python
->>> select((d.name, d.features['clustering']) for d in DatabaseVendor)[:]
-[('oracle', True)]
-```
-
 
 Within queries, `dict` is associated with JSON type. For example, here is how you can find element
 by its JSON value:
@@ -96,12 +105,10 @@ The `list` type will probably be used for the array type in databases supporting
 so currently you should wrap it in a `Json` object:
 
 ```python
-with db_session:
-    oracle = get(d for d in DatabaseVendor if d.name == 'oracle')
-    oracle.supported_os = Json(['RHEL', 'Oracle Linux', 'SUSE'])
+select(o for o in MyEntity if o.list_data == Json(['some', 'data']))
 ```
 
-### "Contains" query
+#### "Contains" query
 
 In PostgreSQL, you can query all the instances containing a given subset of data.
 You can do it using Python `in` operator:
@@ -112,7 +119,7 @@ select({"visible": True} in obj.data['details'] for obj in MyEntity)
 
 `Note:`: Works only with PostgreSQL
 
-### JSON concatenation
+#### JSON concatenation
 
 In PostgreSQL, you can concatenate JSON data:
 ```python
@@ -123,7 +130,7 @@ select(e.data | e.extra_data for e in MyEntity)
 
 Besides an attribute, `extra_data` could be a Python dict as well.
 
-### Length of json value
+#### Length of json value
 
 You can reference the length of JSON data in queries:
 
