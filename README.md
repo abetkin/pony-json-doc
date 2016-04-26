@@ -117,7 +117,7 @@ You can do it using Python `in` operator:
 select({"visible": True} in obj.data['details'] for obj in MyEntity)
 ```
 
-`Note:`: Works only with PostgreSQL
+`Supported in:` PostgreSQL
 
 #### JSON concatenation
 
@@ -126,9 +126,56 @@ In PostgreSQL, you can concatenate JSON data:
 select(e.data | e.extra_data for e in MyEntity)
 ```
 
-`Note:`: Works only with PostgreSQL
+`Supported in:` PostgreSQL
 
 Besides an attribute, `extra_data` could be a Python dict as well.
+
+#### Wildcards in JSON paths
+
+A nice feature is offered by Oracle/MySql: you can use a wildcard to represent "any value".
+The Python syntax for this depends on whether you want to substitute integer or string.
+In the former case you should use an empty slice(`[:]`), in the latter - an Ellipsis slice
+(`[...]`).
+
+Let's have a look at another example. Suppose we design a database for a realty agency.
+
+```python
+class Lodging(db.Entity):
+    cost = Required(Decimal)
+    info = Optional(Json)
+    pictures = Optional(Json)
+
+db.generate_mapping(create_tables=True)
+
+pictures = [
+    {
+        'url': 'http://mypictures.com/3213',
+        'description': 'Living room',
+    },
+    {
+        'url': 'http://mypictures.com/3214',
+        'description': 'Bathroom',
+    },
+]
+
+with db_session:
+    Lodging(pictures=pictures, cost='25000')
+```
+
+Then suppose you want to fetch all pictures. You can get lodging pictures with:
+```python
+>>> select(l.pictures[:]['url'] for l in Lodging)[:]
+[['http://mypictures.com/3213', 'http://mypictures.com/3214']]
+```
+
+In a similar way you can substitute a string key with a wildcard. Something like
+```python
+obj.items_dict[...]['nested attribute']
+```
+
+
+
+`Supported in:` MySql, Oracle
 
 #### Length of json value
 
@@ -140,34 +187,9 @@ select(obj for obj in MyEntity if len(obj.data) == 1)
 
 `Note:` Not available in sqlite when used without the `json1` extension.
 
-##  Database support
+### Notes on database support
 
-The common set of features supported for all databases is
-- read/write operations for JSON fields
-- querying JSON paths
+#### SQLite
 
-In the examples below, data field is supposed to be of `Json` type.
-
-### SQLite
-
-You can benefit from better JSON support in sqlite if you have `json1` extension
-installed. Otherwise, JSON values are fetched and parsed in an ineffective way.
-
-### PostgreSQL
-
-As shown above, PostgreSQL supports JSON concatenation and "JSON contains" features
-
-### MySql and Oracle
-
-MySql and Oracle support wildcards in JSON path, meaning "any value".
-For example:
-```python
-select(o for o in MyEntity if o.data['items'][:]['visible'] == True)
-```
-Here we have used a wildcard for a numeric value of the item index. As you see,
-Python empty slice is used for this.
-
-Python `Ellipsis` represents a wildcard for a string JSON key, like this:
-```python
-select(o.data[...]['title'] for o in MyEntity)
-```
+With SQLite, it is highly recommended to use `json1` extension. Otherwise, there
+will be severe performance penalty for JSON paths queries. 
