@@ -108,27 +108,43 @@ so currently you should wrap it in a `Json` object:
 select(o for o in MyEntity if o.list_data == Json(['some', 'data']))
 ```
 
-#### "Contains" query
+#### "Contains JSON" and "has key" queries 
 
-In PostgreSQL, you can query all the instances containing a given subset of data.
-You can do it using Python `in` operator:
-    
+Pony has support for both these PostgresQL features
+(`<@` and `?` operators, read more in PostgreSQL [docs](http://www.postgresql.org/docs/9.5/static/functions-json.html#FUNCTIONS-JSONB-OP-TABLE)
+).
+
+ With "contains" (`<@`) you can query all the instances containing a given subset of data,
+ while "has key" (`?`) checks json contains the specified key at the top level.
+ 
+Pony syntax for both queries is Python `in` operator.
+
+Using "has key" feature, we can select all S-sized t-shirts with
 ```python
-select({"visible": True} in obj.data['details'] for obj in MyEntity)
+select(t for t in TShirt if 'S' in t.sizes)
 ```
 
-`Supported in:` PostgreSQL
+In the same way we can check JSON contains some part
+
+```python
+select(t for t in TShirt if {'laundry_temp': 40} in t.extra_info)
+```
+
+`Supported in:` PostgreSQL.
 
 #### JSON concatenation
 
-In PostgreSQL, you can concatenate JSON data:
+In PostgreSQL, you can concatenate JSON data using `||` operator
+(read more in PostgreSQL [docs](http://www.postgresql.org/docs/9.5/static/functions-json.html#FUNCTIONS-JSONB-OP-TABLE))
+.
+
 ```python
 select(e.data | e.extra_data for e in MyEntity)
 ```
-
-`Supported in:` PostgreSQL
-
 Besides an attribute, `extra_data` could be a Python dict as well.
+
+`Supported in:` PostgreSQL. 
+
 
 #### Wildcards in JSON paths
 
@@ -137,34 +153,31 @@ The Python syntax for this depends on whether you want to substitute integer or 
 In the former case you should use an empty slice(`[:]`), in the latter - an Ellipsis slice
 (`[...]`).
 
-Let's have a look at another example. Suppose we design a database for a realty agency.
+Let's have a look at some example. Suppose our t-shirt store is really an online one
+and has to show some pictures for the t-shirts for sale.
 
 ```python
-class Lodging(db.Entity):
-    cost = Required(Decimal)
-    info = Optional(Json)
+class TShirt(db.Entity):
+    # ...
     pictures = Optional(Json)
 
-db.generate_mapping(create_tables=True)
-
-pictures = [
-    {
-        'url': 'http://mypictures.com/3213',
-        'description': 'Living room',
-    },
-    {
-        'url': 'http://mypictures.com/3214',
-        'description': 'Bathroom',
-    },
-]
-
 with db_session:
-    Lodging(pictures=pictures, cost='25000')
+    ts = TShirt['A-235']
+    ts.pictures = [
+        {
+            'url': 'http://mypictures.com/3213',
+            'description': 'Front side',
+        },
+        {
+            'url': 'http://mypictures.com/3214',
+            'description': 'Back side',
+        },
+    ]
 ```
 
-Then suppose you want to fetch all pictures. You can get lodging pictures with:
+Then suppose you want to fetch all pictures. You can select all the URLs with:
 ```python
->>> select(l.pictures[:]['url'] for l in Lodging)[:]
+>>> select(ts.pictures[:]['url'] for ts in TShirt)[:]
 [['http://mypictures.com/3213', 'http://mypictures.com/3214']]
 ```
 
