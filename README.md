@@ -28,6 +28,16 @@ class TShirt(db.Entity):
 
 ```
 
+`Note:`
+
+By default optimistic checks are enabled for `Json` attributes,
+you can disable it passing `optimistic=False`:
+
+```python
+class MyEntity(db.Entity):
+    data = Optional(Json, optimistic=False)
+```
+
 In the example above we have a T-Shirts database, where we have some required attributes
 like color and sizes left as well as some extra info that can be provided by the manufacturer.
 `sizes` attribute is supposed to be a set. With JSON, a way to model a set is to use a
