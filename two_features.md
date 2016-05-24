@@ -1,6 +1,7 @@
 ## Numeric data types support
 
 ### Python
+
 ```python
 get(
     d.data['val'] for d in self.db.Data
