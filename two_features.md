@@ -9,6 +9,7 @@ get(
 ```
 
 ### PostgreSQL
+
 ```sql
 SELECT DISTINCT ("d"."data"->'val')
 FROM "data" "d"
@@ -63,6 +64,7 @@ select(
 ```
 
  ### PostgreSQL
+ 
 ```sql
 SELECT "m"."info"
 FROM "e" "m"
